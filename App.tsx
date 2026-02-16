@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Page, Hobby, Achievement, TeacherEvaluation, GoalkeeperStats } from './types';
 import { 
   DEFAULT_STUDENT_NAME, 
@@ -12,8 +12,6 @@ import {
 import { QuizGame } from './components/QuizGame';
 import { Button } from './components/Button';
 import { FifaCard } from './components/FifaCard';
-import { db } from './firebase';
-import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
@@ -21,10 +19,8 @@ const App: React.FC = () => {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
 
-  // App State
+  // App State - Working Locally Now
   const [studentName, setStudentName] = useState(DEFAULT_STUDENT_NAME);
   const [studentAge, setStudentAge] = useState(DEFAULT_STUDENT_AGE);
   const [hobbies, setHobbies] = useState<Hobby[]>(DEFAULT_HOBBIES);
@@ -32,51 +28,15 @@ const App: React.FC = () => {
   const [evaluations, setEvaluations] = useState<TeacherEvaluation[]>(DEFAULT_TEACHER_EVALUATIONS);
   const [gkStats, setGkStats] = useState<GoalkeeperStats>(DEFAULT_GK_STATS);
 
-  // Firebase Ref
-  const dataDocRef = doc(db, "studentProfile", "ahmed_info");
-
-  // Load Initial Data from Firebase
-  useEffect(() => {
-    const unsub = onSnapshot(dataDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setStudentName(data.studentName || DEFAULT_STUDENT_NAME);
-        setStudentAge(data.studentAge || DEFAULT_STUDENT_AGE);
-        setHobbies(data.hobbies || DEFAULT_HOBBIES);
-        setAchievements(data.achievements || DEFAULT_ACHIEVEMENTS);
-        setEvaluations(data.evaluations || DEFAULT_TEACHER_EVALUATIONS);
-        setGkStats(data.gkStats || DEFAULT_GK_STATS);
-      }
-      setIsLoading(false);
-    });
-
-    return () => unsub();
-  }, []);
-
-  const saveToFirebase = async (newData: any) => {
-    setIsSaving(true);
-    try {
-      await setDoc(dataDocRef, newData, { merge: true });
-    } catch (error) {
-      console.error("Error saving to Firebase:", error);
-      alert("حدث خطأ أثناء المزامنة مع السحابة");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const [isTeacherModalOpen, setIsTeacherModalOpen] = useState(false);
   const [newEval, setNewEval] = useState({ teacherName: '', subject: '', comment: '', rating: 5 });
 
-  const handleAddEvaluation = async (e: React.FormEvent) => {
+  const handleAddEvaluation = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEval.teacherName || !newEval.subject || !newEval.comment) return;
     
     const evaluation: TeacherEvaluation = { ...newEval, id: Date.now().toString() };
-    const updatedEvals = [evaluation, ...evaluations];
-    
-    setEvaluations(updatedEvals);
-    await saveToFirebase({ evaluations: updatedEvals });
+    setEvaluations([evaluation, ...evaluations]);
     
     setNewEval({ teacherName: '', subject: '', comment: '', rating: 5 });
     setIsTeacherModalOpen(false);
@@ -105,27 +65,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAdminUpdate = async () => {
-    const dataToUpdate = {
-      studentName,
-      studentAge,
-      hobbies,
-      achievements,
-      evaluations,
-      gkStats
-    };
-    await saveToFirebase(dataToUpdate);
+  const handleAdminUpdate = () => {
+    // In local mode, we just switch back to home as state is already updated via inputs
     setCurrentPage(Page.HOME);
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-sky-50">
-        <div className="text-6xl animate-spin-slow mb-4">⚽</div>
-        <h2 className="text-2xl font-black text-sky-800">جاري جلب بيانات أحمد...</h2>
-      </div>
-    );
-  }
 
   const renderHome = () => (
     <div className="space-y-16 animate-in fade-in duration-700">
@@ -209,8 +152,8 @@ const App: React.FC = () => {
               <input required className="w-full p-4 rounded-2xl bg-slate-50 border" placeholder="المادة الدراسية" value={newEval.subject} onChange={(e) => setNewEval({...newEval, subject: e.target.value})} />
               <div className="flex gap-2">{[1,2,3,4,5].map(s => (<button type="button" key={s} onClick={() => setNewEval({...newEval, rating: s})} className={`text-2xl ${s <= newEval.rating ? 'text-yellow-400' : 'text-slate-200'}`}>★</button>))}</div>
               <textarea required rows={4} className="w-full p-4 rounded-2xl bg-slate-50 border resize-none" placeholder="التعليق..." value={newEval.comment} onChange={(e) => setNewEval({...newEval, comment: e.target.value})}></textarea>
-              <Button type="submit" disabled={isSaving} className="w-full !py-4 text-lg">
-                {isSaving ? "جاري النشر..." : "نشر التقييم"}
+              <Button type="submit" className="w-full !py-4 text-lg">
+                نشر التقييم
               </Button>
             </form>
           </div>
@@ -223,8 +166,8 @@ const App: React.FC = () => {
     <div className="space-y-12 animate-in fade-in slide-in-from-top-4 pb-12">
       <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
         <div>
-           <h1 className="text-3xl font-black text-slate-900">لوحة التحكم السحابية ☁️</h1>
-           <p className="text-slate-500 text-sm">التعديلات هنا ستظهر فوراً لجميع الزوار</p>
+           <h1 className="text-3xl font-black text-slate-900">لوحة التحكم المحلية 🛠️</h1>
+           <p className="text-slate-500 text-sm">التعديلات هنا ستكون مؤقتة لهذه الجلسة فقط</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={() => setIsAdminAuthenticated(false)} variant="outline" className="text-slate-600">خروج</Button>
@@ -243,7 +186,7 @@ const App: React.FC = () => {
         <h2 className="text-2xl font-bold mb-6 text-yellow-600 border-b pb-4">إحصائيات الفيفا</h2>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {Object.entries(gkStats).map(([key, val]) => (
-            <div key={key}><label className="block text-xs font-bold text-slate-400 mb-1 capitalize">{key}</label><input type="number" className="w-full p-3 rounded-xl border bg-slate-50 text-center font-bold" value={val} onChange={(e) => setGkStats({...gkStats, [key]: Number(e.target.value)})} /></div>
+            <div key={key}><label className="block text-xs font-bold text-slate-400 mb-1 capitalize">{key}</label><input type="number" className="w-full p-3 rounded-xl border bg-slate-50 text-center font-bold" value={val as number} onChange={(e) => setGkStats({...gkStats, [key]: Number(e.target.value)})} /></div>
           ))}
         </div>
       </section>
@@ -281,8 +224,8 @@ const App: React.FC = () => {
       </section>
 
       <div className="sticky bottom-6 flex justify-center">
-        <Button onClick={handleAdminUpdate} disabled={isSaving} className="!px-20 !py-6 text-2xl shadow-2xl bg-emerald-600 hover:bg-emerald-700">
-          {isSaving ? "جاري الحفظ بالسحابة..." : "حفظ التغييرات نهائياً ✅"}
+        <Button onClick={handleAdminUpdate} className="!px-20 !py-6 text-2xl shadow-2xl bg-emerald-600 hover:bg-emerald-700">
+          حفظ والعودة للرئيسية ✅
         </Button>
       </div>
     </div>
@@ -327,11 +270,8 @@ const App: React.FC = () => {
       </main>
 
       <footer className="mt-20 py-10 text-center text-slate-500 text-sm border-t border-sky-100">
-        <div className="flex justify-center gap-4 mb-4">
-           {isSaving && <span className="text-emerald-600 animate-pulse font-bold">● جاري المزامنة مع Firebase...</span>}
-        </div>
         <p>© ٢٠٢٤ ملف إنجاز الطالب {studentName}</p>
-        <p className="mt-2 italic">متصل بقاعدة بيانات Firebase المباشرة</p>
+        <p className="mt-2 italic">تطبيق محلي يعمل بذكاء</p>
       </footer>
     </div>
   );
